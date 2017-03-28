@@ -5,6 +5,7 @@ from PIL import Image
 
 from deeprl_hw2 import utils
 from deeprl_hw2.core import Preprocessor
+from scipy.misc import imresize
 
 
 class HistoryPreprocessor(Preprocessor):
@@ -23,19 +24,26 @@ class HistoryPreprocessor(Preprocessor):
 
     """
 
-    def __init__(self, history_length=1):
-        pass
+    def __init__(self, history_length=4):
+        self.history_length = history_length
+        self.reset()
 
     def process_state_for_network(self, state):
         """You only want history when you're deciding the current action to take."""
-        pass
+        if self.his == []:
+            self.his = [np.zeros(state.shape) for i in range(self.history_length)]
+        self.his = self.his[:3]
+        self.his.append(state)
+        return self.his
+
+
 
     def reset(self):
         """Reset the history sequence.
 
         Useful when you start a new episode.
         """
-        pass
+        self.his = []
 
     def get_config(self):
         return {'history_length': self.history_length}
@@ -78,7 +86,8 @@ class AtariPreprocessor(Preprocessor):
     """
 
     def __init__(self, new_size):
-        pass
+        self.new_size = new_size
+
 
     def process_state_for_memory(self, state):
         """Scale, convert to greyscale and store as uint8.
@@ -98,7 +107,23 @@ class AtariPreprocessor(Preprocessor):
         Basically same as process state for memory, but this time
         outputs float32 images.
         """
-        pass
+        new_size = self.new_size
+        r, g, b = state[:,:,0], state[:,:,1], state[:,:,2]
+        state = 0.2989 * r + 0.5870 * g + 0.1140 * b
+        size = state.shape
+        if size[0] > size[1]:
+            tmp_size = (int(round(new_size[1]/float(size[1]) * size[0])), new_size[1])
+        else:
+            tmp_size = (new_size[1], int(round(new_size[1]/float(size[0]) * size[1])))
+
+        state = imresize(state, tmp_size, mode='F')
+
+        size = state.shape
+        start = ((size[0] - new_size[0]) / 2, (size[1] - new_size[1]) / 2)
+        state = state[start[0]:start[0]+new_size[0], start[1]:start[1]+new_size[0]]
+        state = state / 255
+        return state
+
 
     def process_batch(self, samples):
         """The batches from replay memory will be uint8, convert to float32.
@@ -111,7 +136,11 @@ class AtariPreprocessor(Preprocessor):
 
     def process_reward(self, reward):
         """Clip reward between -1 and 1."""
-        pass
+        if reward > 0:
+            reward = 1
+        elif reward < 0
+            reward = -1
+        return reward
 
 
 class PreprocessorSequence(Preprocessor):

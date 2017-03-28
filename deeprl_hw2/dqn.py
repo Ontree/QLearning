@@ -1,4 +1,9 @@
 """Main DQN agent."""
+from keras.optimizers import Adam
+from policy import *
+from preprocessor import *
+from core import *
+import numpy as np
 
 class DQNAgent:
     """Class implementing DQN.
@@ -39,18 +44,35 @@ class DQNAgent:
       How many samples in each minibatch.
     """
     def __init__(self,
-                 q_network,
-                 preprocessor,
-                 memory,
-                 policy,
-                 gamma,
-                 target_update_freq,
-                 num_burn_in,
-                 train_freq,
-                 batch_size):
-        pass
+                q_network,
+                preprocessor,
+                memory,
+                gamma,
+                target_update_freq,
+                num_burn_in,
+                train_freq,
+                batch_size,
+                is_linear,
+                model_type,
+                use_replay_and_target_fixing,
+                epsilon):
+        self.q_network = q_network
+        self.preprocessor = preprocessor 
+        self.memory = memory
+        self.policy = policy
+        self.gamma = gamma
+        self.target_update_freq = target_update_freq
+        self.num_burn_in = num_burn_in
+        self.train_freq = train_freq
+        self.batch_size = batch_size
+        self.model_type = model_type
+        self.use_replay_and_target_fixing = use_replay_and_target_fixing
+        self.model_name = ('linear_' if is_linear else 'deep_') + model_type + ('_simple' if use_replay_and_target_fixing else '')
+        self.weight_file_name = 'weights/' + model_name + '.h5'
+        self.epsilon = epsilon
+        self.his_preprocessor = HistoryPreprocessor()
 
-    def compile(self, optimizer, loss_func):
+    def compile(self, lr = 0.0001, optimizer_name='adam', loss_func='mse'):
         """Setup all of the TF graph variables/ops.
 
         This is inspired by the compile method on the
@@ -67,9 +89,15 @@ class DQNAgent:
         keras.optimizers.Optimizer class. Specifically the Adam
         optimizer.
         """
-        pass
+        if optimizer_name = 'adam':
+            optimizer = Adam(lr=lr)
 
-    def calc_q_values(self, state):
+        self.q_network.compile(optimizer=optimizer,
+              loss='mse',
+              metrics=['mse'] )
+
+    #def calc_q_values(self, state):
+    def calc_q_values(self, state, network):
         """Given a state (or batch of states) calculate the Q-values.
 
         Basically run your network on these states.
@@ -78,9 +106,10 @@ class DQNAgent:
         ------
         Q-values for the state(s)
         """
-        pass
+        Qs = network.predict(state)[0]
+        return Qs
 
-    def select_action(self, state, **kwargs):
+    def select_action(self, state, network, policy): #, stage, **kwargs):
         """Select the action based on the current state.
 
         You will probably want to vary your behavior here based on
@@ -101,7 +130,13 @@ class DQNAgent:
         --------
         selected action
         """
-        pass
+        Qs = self.calc_q_values(state, network)
+        action = np.argmax(Qs)
+        print Qs
+        print action
+        return action
+
+            
 
     def update_policy(self):
         """Update your policy.
@@ -145,7 +180,35 @@ class DQNAgent:
           How long a single episode should last before the agent
           resets. Can help exploration.
         """
-        pass
+        self.policy = LinearDecayGreedyEpsilonPolicy()
+        #n_action = env.action_space.n
+        it = 0
+        if self.use_replay_and_target_fixing == False:
+            state = env.reset()
+            while True:
+                it += 1
+                state = self.preprocessor.process_state_for_network(state)
+                his_state = self.his_preprocessor.process_state_for_network(state)
+                action = self.select_action(his_state, self.q_network)
+                next_s, r, done, info = env.step(action)
+                r = preprocessor.process_reward(r)
+                if done:
+                    y = r
+                    q_network.fit([his_state], [y])
+                    state = env.reset()
+                    self.his_preprocessor.reset()
+                    if it >= num_iterations:
+                        network.save_weights(self.weight_file_name)
+                        break
+                else:
+                    y = r + self.gamma * max(self.calc_q_values(next_s, q_network))
+                    q_network.fit([his_state], [y])
+                    state = next_s
+        
+
+
+
+
 
     def evaluate(self, env, num_episodes, max_episode_length=None):
         """Test your agent with a provided environment.
@@ -160,4 +223,29 @@ class DQNAgent:
         You can also call the render function here if you want to
         visually inspect your policy.
         """
-        pass
+        self.policy = GreedyEpsilonPolicy(self.epsilon)
+        rewards = []
+        for epi in range(num_episodes):
+            self.his_preprocessor.reset();
+            state = env.reset();
+            reward = 0
+            while True: 
+              state = self.preprocessor.process_state_for_network(state)
+              his_state = self.his_preprocessor.process_state_for_network(state)
+              action = self.select_action(his_state, self.q_network)
+              state, r, done, info = env.step(action)
+              reward += r
+              print action, r
+              if done:
+                  rewards.append(reward)
+                  break
+        print 'average reward: ', np.mean(rewards)
+
+
+
+
+
+    def load_weights(self):
+        self.q_network.load_weights(self.weight_file_name)
+
+
