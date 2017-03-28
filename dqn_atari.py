@@ -8,15 +8,20 @@ import numpy as np
 import tensorflow as tf
 from keras.layers import (Activation, Convolution2D, Dense, Flatten, Input,
                           Permute)
-from keras.models import Model
+from keras.models import Model, Sequential
 from keras.optimizers import Adam
 
-import deeprl_hw2 as tfrl
+#import deeprl_hw2 as tfrl
 from deeprl_hw2.dqn import DQNAgent
 from deeprl_hw2.objectives import mean_huber_loss
+from deeprl_hw2.preprocessors import *
+import gym
+from keras import backend as K
 
 
-def create_model(window, input_shape, num_actions,
+
+
+def create_model(window, input_shape, num_actions, is_linear,
                  model_name='q_network'):  # noqa: D103
     """Create the Q-network model.
 
@@ -45,7 +50,27 @@ def create_model(window, input_shape, num_actions,
     keras.models.Model
       The Q-model.
     """
-    pass
+    config = tf.ConfigProto()
+    config.gpu_options.allow_growth=True
+    sess = tf.Session(config=config)
+    K.set_session(sess)
+
+    model = Sequential()
+    if not is_linear:
+        model.add(Conv2D(16, (8, 8), activation='relu', input_shape = (input_shape[0], input_shape[1], window), strides = (4, 4)))
+        model.add(Conv2D(32, (4, 4), activation='relu', strides = (2, 2)))
+        model.add(Flatten())
+        model.add(Dense(256, activation='relu'))
+        # more hidden layers?
+    else:
+        model.add(input_shape = (input_shape[0], input_shape[1], window))
+
+    model.add(Dense(num_actions))
+    return model
+
+
+
+
 
 
 def get_output_folder(parent_dir, env_name):
@@ -87,16 +112,42 @@ def get_output_folder(parent_dir, env_name):
 
 def main():  # noqa: D103
     parser = argparse.ArgumentParser(description='Run DQN on Atari Breakout')
-    parser.add_argument('--env', default='Breakout-v0', help='Atari env name')
+    #parser.add_argument('--env', default='Breakout-v0', help='Atari env name')
+    parser.add_argument('--env', default='SpaceInvaders-v0', help='Atari env name')
     parser.add_argument(
         '-o', '--output', default='atari-v0', help='Directory to save data to')
     parser.add_argument('--seed', default=0, type=int, help='Random seed')
 
     args = parser.parse_args()
-    args.input_shape = tuple(args.input_shape)
+    
+    #args.input_shape = tuple(args.input_shape)
 
     args.output = get_output_folder(args.output, args.env)
+    env = gym.make(args.env)
+    #env = wrappers.Monitor(env, args.output)
+    env.seed(args.seed)
 
+    is_linear = True
+    agent = DQNAgent(q_network = create_model(4, (84, 84), env.action_space.n, is_linear),
+        Preprocessor = AtariPreprocessor((84, 84)),
+        memory = None,
+        policy = None,
+        gamma =0.99,
+        target_update_freq = 10000,
+        num_burn_in = None,
+        train_freq = None,
+        batch_size = 32,
+        is_linear = True,
+        model_type = 'double',
+        use_replay_and_target_fixing = False,
+        epsilon = 0.05)
+    
+    agent.compile(lr = 0.0001)
+    agent.fit()
+    
+    agent.load_weights()
+    agent.evaluate(env, num_episodes, max_episode_length=None)
+    env.close()
     # here is where you should start up a session,
     # create your DQN agent, create your model, etc.
     # then you can run your fit method.
