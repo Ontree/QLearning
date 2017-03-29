@@ -34,7 +34,7 @@ class HistoryPreprocessor(Preprocessor):
             self.his = [np.zeros(state.shape) for i in range(self.history_length)]
         self.his = self.his[:3]
         self.his.append(state)
-        return self.his
+        return np.dstack(self.his)
 
 
 
@@ -138,7 +138,7 @@ class AtariPreprocessor(Preprocessor):
         """Clip reward between -1 and 1."""
         if reward > 0:
             reward = 1
-        elif reward < 0
+        elif reward < 0:
             reward = -1
         return reward
 

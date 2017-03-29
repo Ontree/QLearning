@@ -7,15 +7,15 @@ import random
 import numpy as np
 import tensorflow as tf
 from keras.layers import (Activation, Convolution2D, Dense, Flatten, Input,
-                          Permute)
+                          Permute, Reshape)
 from keras.models import Model, Sequential
 from keras.optimizers import Adam
 
 #import deeprl_hw2 as tfrl
+import gym
 from deeprl_hw2.dqn import DQNAgent
 from deeprl_hw2.objectives import mean_huber_loss
 from deeprl_hw2.preprocessors import *
-import gym
 from keras import backend as K
 
 
@@ -62,10 +62,10 @@ def create_model(window, input_shape, num_actions, is_linear,
         model.add(Flatten())
         model.add(Dense(256, activation='relu'))
         # more hidden layers?
+        model.add(Dense(num_actions))
     else:
-        model.add(input_shape = (input_shape[0], input_shape[1], window))
-
-    model.add(Dense(num_actions))
+        model.add(Reshape((input_shape[0]*input_shape[1]*window,), input_shape=(input_shape[0], input_shape[1], window)))
+        model.add(Dense(num_actions))
     return model
 
 
@@ -92,7 +92,8 @@ def get_output_folder(parent_dir, env_name):
     parent_dir/run_dir
       Path to this run's save directory.
     """
-    os.makedirs(parent_dir, exist_ok=True)
+    if not os.path.exists(parent_dir):
+        os.makedirs(parent_dir)
     experiment_id = 0
     for folder_name in os.listdir(parent_dir):
         if not os.path.isdir(os.path.join(parent_dir, folder_name)):
@@ -123,15 +124,15 @@ def main():  # noqa: D103
     #args.input_shape = tuple(args.input_shape)
 
     args.output = get_output_folder(args.output, args.env)
+    print 1
     env = gym.make(args.env)
     #env = wrappers.Monitor(env, args.output)
     env.seed(args.seed)
 
     is_linear = True
     agent = DQNAgent(q_network = create_model(4, (84, 84), env.action_space.n, is_linear),
-        Preprocessor = AtariPreprocessor((84, 84)),
+        preprocessor = AtariPreprocessor((84, 84)),
         memory = None,
-        policy = None,
         gamma =0.99,
         target_update_freq = 10000,
         num_burn_in = None,
@@ -141,16 +142,17 @@ def main():  # noqa: D103
         model_type = 'double',
         use_replay_and_target_fixing = False,
         epsilon = 0.05)
-    
+    print 2
     agent.compile(lr = 0.0001)
-    agent.fit()
-    
+    agent.fit(env, 10)
+    print 3 
     agent.load_weights()
-    agent.evaluate(env, num_episodes, max_episode_length=None)
+    agent.evaluate(env, 100, max_episode_length=None)
     env.close()
     # here is where you should start up a session,
     # create your DQN agent, create your model, etc.
     # then you can run your fit method.
 
 if __name__ == '__main__':
+    print 0
     main()

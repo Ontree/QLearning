@@ -1,7 +1,8 @@
 """Main DQN agent."""
 from keras.optimizers import Adam
+import gym
 from policy import *
-from preprocessor import *
+from preprocessors import *
 from core import *
 import numpy as np
 
@@ -59,7 +60,6 @@ class DQNAgent:
         self.q_network = q_network
         self.preprocessor = preprocessor 
         self.memory = memory
-        self.policy = policy
         self.gamma = gamma
         self.target_update_freq = target_update_freq
         self.num_burn_in = num_burn_in
@@ -68,7 +68,7 @@ class DQNAgent:
         self.model_type = model_type
         self.use_replay_and_target_fixing = use_replay_and_target_fixing
         self.model_name = ('linear_' if is_linear else 'deep_') + model_type + ('_simple' if use_replay_and_target_fixing else '')
-        self.weight_file_name = 'weights/' + model_name + '.h5'
+        self.weight_file_name = 'weights/' + self.model_name + '.h5'
         self.epsilon = epsilon
         self.his_preprocessor = HistoryPreprocessor()
 
@@ -89,7 +89,7 @@ class DQNAgent:
         keras.optimizers.Optimizer class. Specifically the Adam
         optimizer.
         """
-        if optimizer_name = 'adam':
+        if optimizer_name == 'adam':
             optimizer = Adam(lr=lr)
 
         self.q_network.compile(optimizer=optimizer,
@@ -106,7 +106,7 @@ class DQNAgent:
         ------
         Q-values for the state(s)
         """
-        Qs = network.predict(state)[0]
+        Qs = network.predict(np.array([state]))[0]
         return Qs
 
     def select_action(self, state, network, policy): #, stage, **kwargs):
@@ -131,9 +131,7 @@ class DQNAgent:
         selected action
         """
         Qs = self.calc_q_values(state, network)
-        action = np.argmax(Qs)
-        print Qs
-        print action
+        action = policy.select_action(Qs)
         return action
 
             
@@ -181,29 +179,37 @@ class DQNAgent:
           resets. Can help exploration.
         """
         self.policy = LinearDecayGreedyEpsilonPolicy()
-        #n_action = env.action_space.n
+        n_action = env.action_space.n
         it = 0
         if self.use_replay_and_target_fixing == False:
             state = env.reset()
+            state = self.preprocessor.process_state_for_network(state)
+            his_state = self.his_preprocessor.process_state_for_network(state)
             while True:
                 it += 1
-                state = self.preprocessor.process_state_for_network(state)
-                his_state = self.his_preprocessor.process_state_for_network(state)
-                action = self.select_action(his_state, self.q_network)
+                action = self.select_action(his_state, self.q_network,
+                                            self.policy)
                 next_s, r, done, info = env.step(action)
-                r = preprocessor.process_reward(r)
+                r = self.preprocessor.process_reward(r)
                 if done:
                     y = r
-                    q_network.fit([his_state], [y])
+                    self.q_network.fit(np.array([his_state]),np.array([[y]*n_action]),nb_epoch
+                                      = 1)
                     state = env.reset()
                     self.his_preprocessor.reset()
+                    state = self.preprocessor.process_state_for_network(state)
+                    his_state = self.his_preprocessor.process_state_for_network(state)
                     if it >= num_iterations:
-                        network.save_weights(self.weight_file_name)
+                        self.q_network.save_weights(self.weight_file_name)
                         break
                 else:
-                    y = r + self.gamma * max(self.calc_q_values(next_s, q_network))
-                    q_network.fit([his_state], [y])
+                    old_his = his_state
                     state = next_s
+                    state = self.preprocessor.process_state_for_network(state)
+                    his_state = self.his_preprocessor.process_state_for_network(state)
+                    y = r + self.gamma * max(self.calc_q_values(his_state, self.q_network))
+                    self.q_network.fit(np.array([old_his]),
+                                       np.array([[y]*n_action]),nb_epoch = 1)
         
 
 
@@ -223,7 +229,7 @@ class DQNAgent:
         You can also call the render function here if you want to
         visually inspect your policy.
         """
-        self.policy = GreedyEpsilonPolicy(self.epsilon)
+        policy = GreedyEpsilonPolicy(self.epsilon)
         rewards = []
         for epi in range(num_episodes):
             self.his_preprocessor.reset();
@@ -232,12 +238,12 @@ class DQNAgent:
             while True: 
               state = self.preprocessor.process_state_for_network(state)
               his_state = self.his_preprocessor.process_state_for_network(state)
-              action = self.select_action(his_state, self.q_network)
+              action = self.select_action(his_state, self.q_network,policy)
               state, r, done, info = env.step(action)
               reward += r
-              print action, r
               if done:
                   rewards.append(reward)
+                  print epi, reward
                   break
         print 'average reward: ', np.mean(rewards)
 
