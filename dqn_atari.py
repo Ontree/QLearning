@@ -7,7 +7,7 @@ import random
 import numpy as np
 import tensorflow as tf
 from keras.layers import (Activation, Convolution2D, Dense, Flatten, Input,
-                          Permute, Reshape)
+                          Merge, Embedding, Reshape, Permute, Reshape)
 from keras.models import Model, Sequential
 from keras.optimizers import Adam
 
@@ -74,10 +74,11 @@ def create_model(window, input_shape, num_actions, is_linear,
     all_actions = np.ones([1, num_actions])
     embedding = np.append(embedding, all_actions, axis = 0)
     action_mask_model = Sequential()
-    action_mask_model.add(Embedding(num_actions + 1, num_actions, weights=[embedding], trainable=False))
-
+    action_mask_model.add(Embedding(num_actions + 1, num_actions, input_length=
+                                   1, weights=[embedding], trainable=False))
+    action_mask_model.add(Reshape((num_actions,)))
     model = Sequential()
-    model.add(Merge([im_model, action_mask_model], mode='dot'))
+    model.add(Merge([im_model, action_mask_model], mode='mul'))
     return model
 
 
@@ -155,7 +156,7 @@ def main():  # noqa: D103
         epsilon = 0.05)
 
     agent.compile(lr = 0.0001)
-    agent.fit(env, 10)
+    agent.fit(env, 100)
     agent.load_weights()
     agent.evaluate(env, 10, max_episode_length=None)
     env.close()

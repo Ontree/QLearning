@@ -3,7 +3,7 @@ from keras.optimizers import Adam
 import gym
 from policy import *
 from preprocessors import *
-from optimizers import *
+from objectives import *
 from core import *
 import numpy as np
 
@@ -109,7 +109,8 @@ class DQNAgent:
         ------
         Q-values for the state(s)
         """
-        Qs = network.predict([np.array([state]), self.n_action])[0]
+        Qs = network.predict([np.array([state]), np.array([self.n_action])])[0]
+        print Qs
         return Qs
 
 
@@ -213,8 +214,8 @@ class DQNAgent:
                     state = self.preprocessor.process_state_for_network(state)
                     his_state = self.his_preprocessor.process_state_for_network(state)
                     y = r + self.gamma * max(self.calc_q_values(his_state, self.q_network))
-                    self.q_network.fit([np.array([old_his]), np.array([action])]
-                                       np.array([[y]*n_action]),nb_epoch = 1)
+                    self.q_network.fit([np.array([old_his]),
+                                        np.array([action])], np.array([[y]*n_action]),nb_epoch = 1)
         
 
     def evaluate(self, env, num_episodes, max_episode_length=None):
@@ -231,7 +232,7 @@ class DQNAgent:
         visually inspect your policy.
         """
         policy = GreedyEpsilonPolicy(self.epsilon)
-        self.n_action = n_action
+        self.n_action = env.action_space.n
         rewards = []
         for epi in range(num_episodes):
             self.his_preprocessor.reset();
@@ -241,6 +242,7 @@ class DQNAgent:
               state = self.preprocessor.process_state_for_network(state)
               his_state = self.his_preprocessor.process_state_for_network(state)
               action = self.select_action(his_state, self.q_network,policy)
+              print action
               state, r, done, info = env.step(action)
               reward += r
               if done:
