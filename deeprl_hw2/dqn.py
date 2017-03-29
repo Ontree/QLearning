@@ -3,6 +3,7 @@ from keras.optimizers import Adam
 import gym
 from policy import *
 from preprocessors import *
+from optimizers import *
 from core import *
 import numpy as np
 
@@ -71,8 +72,9 @@ class DQNAgent:
         self.weight_file_name = 'weights/' + self.model_name + '.h5'
         self.epsilon = epsilon
         self.his_preprocessor = HistoryPreprocessor()
+        
 
-    def compile(self, lr = 0.0001, optimizer_name='adam', loss_func='mse'):
+    def compile(self, lr = 0.0001, optimizer_name='adam', loss_func=mean_huber_loss):
         """Setup all of the TF graph variables/ops.
 
         This is inspired by the compile method on the
@@ -93,8 +95,9 @@ class DQNAgent:
             optimizer = Adam(lr=lr)
 
         self.q_network.compile(optimizer=optimizer,
-              loss='mse',
+              loss=loss_func,
               metrics=['mse'] )
+
 
     #def calc_q_values(self, state):
     def calc_q_values(self, state, network):
@@ -106,8 +109,9 @@ class DQNAgent:
         ------
         Q-values for the state(s)
         """
-        Qs = network.predict(np.array([state]))[0]
+        Qs = network.predict([np.array([state]), self.n_action])[0]
         return Qs
+
 
     def select_action(self, state, network, policy): #, stage, **kwargs):
         """Select the action based on the current state.
@@ -153,6 +157,7 @@ class DQNAgent:
         """
         pass
 
+
     def fit(self, env, num_iterations, max_episode_length=None):
         """Fit your model to the provided environment.
 
@@ -180,6 +185,7 @@ class DQNAgent:
         """
         self.policy = LinearDecayGreedyEpsilonPolicy()
         n_action = env.action_space.n
+        self.n_action = n_action
         it = 0
         if self.use_replay_and_target_fixing == False:
             state = env.reset()
@@ -193,8 +199,7 @@ class DQNAgent:
                 r = self.preprocessor.process_reward(r)
                 if done:
                     y = r
-                    self.q_network.fit(np.array([his_state]),np.array([[y]*n_action]),nb_epoch
-                                      = 1)
+                    self.q_network.fit([np.array([his_state]), np.array([action])],np.array([[y]*n_action]),nb_epoch= 1)
                     state = env.reset()
                     self.his_preprocessor.reset()
                     state = self.preprocessor.process_state_for_network(state)
@@ -208,13 +213,9 @@ class DQNAgent:
                     state = self.preprocessor.process_state_for_network(state)
                     his_state = self.his_preprocessor.process_state_for_network(state)
                     y = r + self.gamma * max(self.calc_q_values(his_state, self.q_network))
-                    self.q_network.fit(np.array([old_his]),
+                    self.q_network.fit([np.array([old_his]), np.array([action])]
                                        np.array([[y]*n_action]),nb_epoch = 1)
         
-
-
-
-
 
     def evaluate(self, env, num_episodes, max_episode_length=None):
         """Test your agent with a provided environment.
@@ -230,6 +231,7 @@ class DQNAgent:
         visually inspect your policy.
         """
         policy = GreedyEpsilonPolicy(self.epsilon)
+        self.n_action = n_action
         rewards = []
         for epi in range(num_episodes):
             self.his_preprocessor.reset();

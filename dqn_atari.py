@@ -55,17 +55,29 @@ def create_model(window, input_shape, num_actions, is_linear,
     sess = tf.Session(config=config)
     K.set_session(sess)
 
-    model = Sequential()
+    # the network for processing image
+    im_model = Sequential()
     if not is_linear:
-        model.add(Conv2D(16, (8, 8), activation='relu', input_shape = (input_shape[0], input_shape[1], window), strides = (4, 4)))
-        model.add(Conv2D(32, (4, 4), activation='relu', strides = (2, 2)))
-        model.add(Flatten())
-        model.add(Dense(256, activation='relu'))
+        im_model.add(Conv2D(16, (8, 8), activation='relu', input_shape = (input_shape[0], input_shape[1], window), strides = (4, 4)))
+        im_model.add(Conv2D(32, (4, 4), activation='relu', strides = (2, 2)))
+        im_model.add(Flatten())
+        im_model.add(Dense(256, activation='relu'))
         # more hidden layers?
-        model.add(Dense(num_actions))
+        im_model.add(Dense(num_actions))
     else:
-        model.add(Reshape((input_shape[0]*input_shape[1]*window,), input_shape=(input_shape[0], input_shape[1], window)))
-        model.add(Dense(num_actions))
+        im_model.add(Reshape((input_shape[0]*input_shape[1]*window,), input_shape=(input_shape[0], input_shape[1], window)))
+        im_model.add(Dense(num_actions))
+
+    # mask the action for gradient passing
+    # input_dim = num_actions + 1, the embedding of the last one is [1,..1] which is used to get all q values
+    embedding = np.identity(num_actions)
+    all_actions = np.ones([1, num_actions])
+    embedding = np.append(embedding, all_actions, axis = 0)
+    action_mask_model = Sequential()
+    action_mask_model.add(Embedding(num_actions + 1, num_actions, weights=[embedding], trainable=False))
+
+    model = Sequential()
+    model.add(Merge([im_model, action_mask_model], mode='dot'))
     return model
 
 
@@ -124,7 +136,6 @@ def main():  # noqa: D103
     #args.input_shape = tuple(args.input_shape)
 
     args.output = get_output_folder(args.output, args.env)
-    print 1
     env = gym.make(args.env)
     #env = wrappers.Monitor(env, args.output)
     env.seed(args.seed)
@@ -142,17 +153,15 @@ def main():  # noqa: D103
         model_type = 'double',
         use_replay_and_target_fixing = False,
         epsilon = 0.05)
-    print 2
+
     agent.compile(lr = 0.0001)
     agent.fit(env, 10)
-    print 3 
     agent.load_weights()
-    agent.evaluate(env, 100, max_episode_length=None)
+    agent.evaluate(env, 10, max_episode_length=None)
     env.close()
     # here is where you should start up a session,
     # create your DQN agent, create your model, etc.
     # then you can run your fit method.
 
 if __name__ == '__main__':
-    print 0
     main()
