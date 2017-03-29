@@ -205,16 +205,52 @@ class ReplayMemory:
         We recommend using a list as a ring buffer. Just track the
         index where the next sample should be inserted in the list.
         """
-        pass
+        self.max_size = max_size
+        self.window_length = window_length
+        self.clear()
 
-    def append(self, state, action, reward):
-        raise NotImplementedError('This method should be overridden')
+    def append(self, state, action, reward, is_terminal):
+        item = [(state*255).astype('uint8'), action, reward, is_terminal]
+        if len(self.mem) < self.max_size:
+            self.mem.append(item)
+        else:
+            # use ring buffer
+            self.mem[head] = item
+            self.head = (head + 1) % self.max_size
 
     def end_episode(self, final_state, is_terminal):
         raise NotImplementedError('This method should be overridden')
 
     def sample(self, batch_size, indexes=None):
-        raise NotImplementedError('This method should be overridden')
+        #state_shape = self.mem[0].shape
+        #samples = np.array([]).reshape(0, state_shape[0], state_shape[1])
+        samples = []
+        for i in range(batch_size):
+            ix = np.random.randint(0, len(self.mem))
+            if (ix + 1) % len(self.mem) == self.head:
+                ix -= 1 # we don't want the last frame which has no next state
+            next_ix = (ix + 1) % len(self.mem)
+            state, action, reward, is_terminal = self.mem[ix]
+            state = [state]
+            for j in range(3):
+                if ix == self.head:
+                    break
+                ix -= 1
+                if self.mem[ix][3] == True: #is_terminal
+                    break
+                state = [self.mem[ix]] + state
+            state = [np.zeros(state_shape) for k in range(4 - len(state))] + state
+            if is_terminal:
+                next_state = None
+            else:
+                next_state = (state + [self.mem[next_ix]])[-4:]
+                next_state = (np.dstack(next_state))/255.0
+            state = (np.dstack(state))/255.0
+            samples.append([state, action, reward, next_state, is_terminal])
+      return samples
+
+
 
     def clear(self):
-        raise NotImplementedError('This method should be overridden')
+        self.mem = [] 
+        self.head = 0

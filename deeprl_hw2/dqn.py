@@ -6,6 +6,7 @@ from preprocessors import *
 from objectives import *
 from core import *
 import numpy as np
+import utils
 
 class DQNAgent:
     """Class implementing DQN.
@@ -47,6 +48,7 @@ class DQNAgent:
     """
     def __init__(self,
                 q_network,
+                q_network2,
                 preprocessor,
                 memory,
                 gamma,
@@ -57,8 +59,10 @@ class DQNAgent:
                 is_linear,
                 model_type,
                 use_replay_and_target_fixing,
-                epsilon):
+                epsilon,
+                action_interval):
         self.q_network = q_network
+        self.q_network2 = q_network2
         self.preprocessor = preprocessor 
         self.memory = memory
         self.gamma = gamma
@@ -72,6 +76,8 @@ class DQNAgent:
         self.weight_file_name = 'weights/' + self.model_name + '.h5'
         self.epsilon = epsilon
         self.his_preprocessor = HistoryPreprocessor()
+        self.action_interval = action_interval
+
         
 
     def compile(self, lr = 0.0001, optimizer_name='adam', loss_func=mean_huber_loss):
@@ -156,7 +162,27 @@ class DQNAgent:
         You might want to return the loss and other metrics as an
         output. They can help you monitor how training is going.
         """
-        pass
+        samples = self.memory.sample(self.batch_size)
+        states = []
+        actions = []
+        ys = []
+        for [state, action, r, next_state, is_terminal] in samples:
+            if is_terminal:
+                y = r
+            else:
+                y = r + self.gamma * max(self.calc_q_values(next_state, self.q_network2))
+            y = [y] * self.n_action
+            ys.append(y)
+            states.append(state)
+            actions.append(action)
+        ys = np.array(ys)
+        states = np.array(states)
+        actions = np.array(actions)
+        self.q_network.train_on_batch([states, actions], ys)
+
+
+
+       
 
 
     def fit(self, env, num_iterations, max_episode_length=None):
@@ -216,7 +242,50 @@ class DQNAgent:
                     y = r + self.gamma * max(self.calc_q_values(his_state, self.q_network))
                     self.q_network.fit([np.array([old_his]),
                                         np.array([action])], np.array([[y]*n_action]),nb_epoch = 1)
-        
+        else:
+            it += self.burn_samples(env)
+            while it < num_iterations: 
+                state = env.reset()
+                self.his_preprocessor.reset()
+                action_countdown = 0
+                while True: # start an episode
+                    state = self.preprocessor.process_state_for_network(state)
+                    his_state = self.his_preprocessor.process_state_for_network(state) 
+                    if action_countdown == 0: # change action every self.action_interval steps
+                        action = self.select_action(his_state, self.q_network, self.policy)
+                        action_countdown = self.action_interval  
+                    next_state, reward, is_terminal, info = env.step(action)
+                    it += 1
+                    action_countdown -= 1
+                    self.memory.append(state, action, reward, is_terminal)
+                    if it % self.train_freq == 0:
+                        self.update_policy()
+                    if it % self.target_update_freq == 0:
+                        utils.get_hard_target_model_updates(self.q_network2, self.q_network)
+                    if is_terminal:
+                        break
+
+    
+
+    # collect samples before starting training
+    def burn_samples(self, env):
+        it = 0
+        while  it < self.num_burn_in:
+            state = env.reset()
+            while  True:
+              action = env.action_space.sample()
+              next_state, reward, is_terminal, info = env.step(action)
+              state = self.preprocessor.process_state_for_network(state)
+              self.memory.append(state, action, reward, is_terminal)
+              state = next_state
+              it += 1
+              if is_terminal:
+                  break
+        return it
+
+           
+           
+
 
     def evaluate(self, env, num_episodes, max_episode_length=None):
         """Test your agent with a provided environment.

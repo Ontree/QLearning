@@ -16,6 +16,7 @@ import gym
 from deeprl_hw2.dqn import DQNAgent
 from deeprl_hw2.objectives import mean_huber_loss
 from deeprl_hw2.preprocessors import *
+from core import *
 from keras import backend as K
 
 
@@ -143,17 +144,19 @@ def main():  # noqa: D103
 
     is_linear = True
     agent = DQNAgent(q_network = create_model(4, (84, 84), env.action_space.n, is_linear),
+        q_network2 = create_model(4, (84, 84), env.action_space.n, is_linear),
         preprocessor = AtariPreprocessor((84, 84)),
-        memory = None,
+        memory = ReplayMemory(1000000, 4),
         gamma =0.99,
         target_update_freq = 10000,
-        num_burn_in = None,
-        train_freq = None,
+        num_burn_in = 50000,
+        train_freq = 4,
         batch_size = 32,
-        is_linear = True,
+        is_linear = False,
         model_type = 'double',
-        use_replay_and_target_fixing = False,
-        epsilon = 0.05)
+        use_replay_and_target_fixing = True,
+        epsilon = 0.05,
+        action_interval = 4)
 
     agent.compile(lr = 0.0001)
     agent.fit(env, 100)

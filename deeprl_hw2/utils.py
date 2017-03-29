@@ -85,4 +85,5 @@ def get_hard_target_model_updates(target, source):
     list(tf.Tensor)
       List of tensor update ops.
     """
-    pass
+    weights = source.get_weights()
+    target.set_weights(weights)
