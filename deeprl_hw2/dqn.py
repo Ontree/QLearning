@@ -60,7 +60,9 @@ class DQNAgent:
                 model_type,
                 use_replay_and_target_fixing,
                 epsilon,
-                action_interval):
+                action_interval,
+                save_freq,
+                output_path):
         self.q_network = q_network
         self.q_network2 = q_network2
         self.preprocessor = preprocessor 
@@ -73,10 +75,12 @@ class DQNAgent:
         self.model_type = model_type
         self.use_replay_and_target_fixing = use_replay_and_target_fixing
         self.model_name = ('linear_' if is_linear else 'deep_') + model_type + ('_simple' if use_replay_and_target_fixing else '')
-        self.weight_file_name = 'weights/' + self.model_name + '.h5'
+        self.weight_file_name = output_path + '/' + self.model_name + '.h5'
         self.epsilon = epsilon
         self.his_preprocessor = HistoryPreprocessor()
         self.action_interval = action_interval
+        self.save_freq = save_freq
+        self.output_path = output_path
 
         
 
@@ -103,8 +107,9 @@ class DQNAgent:
         self.q_network.compile(optimizer=optimizer,
               loss=loss_func,
               metrics=['mse'] )
-
-
+        self.q_network.compile(optimizer=optimizer,
+                               loss=loss_func,
+                               metrics=['mse'] )
     #def calc_q_values(self, state):
     def calc_q_values(self, state, network):
         """Given a state (or batch of states) calculate the Q-values.
@@ -116,7 +121,6 @@ class DQNAgent:
         Q-values for the state(s)
         """
         Qs = network.predict([np.array([state]), np.array([self.n_action])])[0]
-        print Qs
         return Qs
 
 
@@ -210,6 +214,9 @@ class DQNAgent:
           How long a single episode should last before the agent
           resets. Can help exploration.
         """
+        ses = tf.get_default_session()
+        writer = tf.summary.FileWriter(self.output_path, ses)
+        writer.add_graph(tf.get_default_graph())
         self.policy = LinearDecayGreedyEpsilonPolicy()
         n_action = env.action_space.n
         self.n_action = n_action
@@ -244,31 +251,49 @@ class DQNAgent:
                                         np.array([action])], np.array([[y]*n_action]),nb_epoch = 1)
         else:
             it += self.burn_samples(env)
-            while it < num_iterations: 
+            epi_num = 0
+            while it < num_iterations:
+                epi_num += 1
+                epi_reward = 0
                 state = env.reset()
                 self.his_preprocessor.reset()
                 action_countdown = 0
                 while True: # start an episode
                     state = self.preprocessor.process_state_for_network(state)
                     his_state = self.his_preprocessor.process_state_for_network(state) 
+                    '''
                     if action_countdown == 0: # change action every self.action_interval steps
                         action = self.select_action(his_state, self.q_network, self.policy)
-                        action_countdown = self.action_interval  
+                        action_countdown = self.action_interval
+                    '''
+                    action = self.select_action(his_state, self.q_network,
+                                                self.policy)
                     next_state, reward, is_terminal, info = env.step(action)
+                    epi_reward += reward
+                    reward = self.preprocessor.process_reward(reward)
                     it += 1
+                    if it%1000 == 0:
+                        print 'it: ', it
                     action_countdown -= 1
                     self.memory.append(state, action, reward, is_terminal)
+                    state = next_state
                     if it % self.train_freq == 0:
                         self.update_policy()
                     if it % self.target_update_freq == 0:
                         utils.get_hard_target_model_updates(self.q_network2, self.q_network)
+                    if it % self.save_freq == 0:
+                        self.q_network.save_weights(self.weight_file_name)
                     if is_terminal:
+                        utils.add_summary(epi_num, 'reward', epi_reward, writer)
                         break
+                    
 
+            self.q_network.save_weights(self.weight_file_name)
     
 
     # collect samples before starting training
     def burn_samples(self, env):
+        print '# collecting samples'
         it = 0
         while  it < self.num_burn_in:
             state = env.reset()
@@ -276,9 +301,12 @@ class DQNAgent:
               action = env.action_space.sample()
               next_state, reward, is_terminal, info = env.step(action)
               state = self.preprocessor.process_state_for_network(state)
+              reward = self.preprocessor.process_reward(reward)
               self.memory.append(state, action, reward, is_terminal)
               state = next_state
               it += 1
+              if it % 100 == 0:
+                  print it
               if is_terminal:
                   break
         return it
@@ -311,7 +339,6 @@ class DQNAgent:
               state = self.preprocessor.process_state_for_network(state)
               his_state = self.his_preprocessor.process_state_for_network(state)
               action = self.select_action(his_state, self.q_network,policy)
-              print action
               state, r, done, info = env.step(action)
               reward += r
               if done:

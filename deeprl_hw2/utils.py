@@ -87,3 +87,11 @@ def get_hard_target_model_updates(target, source):
     """
     weights = source.get_weights()
     target.set_weights(weights)
+
+#add summary to tensorboard
+def add_summary(step, name, value, writer):
+    summary = tf.Summary()
+    summary_value = summary.value.add()
+    summary_value.simple_value = float(value)
+    summary_value.tag = name
+    writer.add_summary(summary, step)

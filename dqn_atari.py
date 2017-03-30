@@ -6,8 +6,8 @@ import random
 
 import numpy as np
 import tensorflow as tf
-from keras.layers import (Activation, Convolution2D, Dense, Flatten, Input,
-                          Merge, Embedding, Reshape, Permute, Reshape)
+from keras.layers import (Activation, convolutional, Dense, Flatten, Input,
+                          Merge, Embedding, Reshape, Permute, Reshape, multiply)
 from keras.models import Model, Sequential
 from keras.optimizers import Adam
 
@@ -16,7 +16,7 @@ import gym
 from deeprl_hw2.dqn import DQNAgent
 from deeprl_hw2.objectives import mean_huber_loss
 from deeprl_hw2.preprocessors import *
-from core import *
+from deeprl_hw2.core import *
 from keras import backend as K
 
 
@@ -51,35 +51,43 @@ def create_model(window, input_shape, num_actions, is_linear,
     keras.models.Model
       The Q-model.
     """
-    config = tf.ConfigProto()
-    config.gpu_options.allow_growth=True
-    sess = tf.Session(config=config)
-    K.set_session(sess)
-
     # the network for processing image
-    im_model = Sequential()
+    im_input = Input((input_shape[0], input_shape[1], window))
     if not is_linear:
-        im_model.add(Conv2D(16, (8, 8), activation='relu', input_shape = (input_shape[0], input_shape[1], window), strides = (4, 4)))
-        im_model.add(Conv2D(32, (4, 4), activation='relu', strides = (2, 2)))
-        im_model.add(Flatten())
-        im_model.add(Dense(256, activation='relu'))
+        '''
+        conv_layer1 = convolutional.Conv2D(16, (8, 8), activation='relu', strides = (4,
+                                                                       4))(im_input)
+        conv_layer2 = convolutional.Conv2D(32, (4, 4), activation='relu', strides = (2,
+                                                                       2))(conv_layer1)
+        flatten_layer = Flatten()(conv_layer2)
+        fc_layer1 = Dense(256, activation='relu')(flatten_layer)
+        '''
+        conv_layer1 = convolutional.Conv2D(32, (8, 8), activation='relu', strides = (4,
+                                                                       4))(im_input)
+        conv_layer2 = convolutional.Conv2D(64, (4, 4), activation='relu', strides = (2, 
+                                                                       2))(conv_layer1)
+        conv_layer3 = convolutional.Conv2D(64, (3, 3), activation='relu', strides = (1, 
+                                                                       1))(conv_layer2)
+        flatten_layer = Flatten()(conv_layer3)
+        fc_layer1 = Dense(512, activation='relu')(flatten_layer)
         # more hidden layers?
-        im_model.add(Dense(num_actions))
+        action_layer = Dense(num_actions)(fc_layer1)
     else:
-        im_model.add(Reshape((input_shape[0]*input_shape[1]*window,), input_shape=(input_shape[0], input_shape[1], window)))
-        im_model.add(Dense(num_actions))
+        reshape_layer = Reshape((input_shape[0]*input_shape[1]*window,))(im_input)
+        action_layer = Dense(num_actions)(reshape_layer)
 
     # mask the action for gradient passing
     # input_dim = num_actions + 1, the embedding of the last one is [1,..1] which is used to get all q values
     embedding = np.identity(num_actions)
     all_actions = np.ones([1, num_actions])
     embedding = np.append(embedding, all_actions, axis = 0)
-    action_mask_model = Sequential()
-    action_mask_model.add(Embedding(num_actions + 1, num_actions, input_length=
-                                   1, weights=[embedding], trainable=False))
-    action_mask_model.add(Reshape((num_actions,)))
-    model = Sequential()
-    model.add(Merge([im_model, action_mask_model], mode='mul'))
+    
+    action_input = Input(shape=(1,))
+    embedding_layer = Embedding(num_actions + 1, num_actions, input_length=
+                                   1, weights=[embedding], trainable=False)(action_input)
+    mask_layer = Reshape((num_actions,))(embedding_layer)
+    output_layer = multiply([action_layer, mask_layer])
+    model = Model([im_input, action_input], output_layer)
     return model
 
 
@@ -122,13 +130,14 @@ def get_output_folder(parent_dir, env_name):
 
     parent_dir = os.path.join(parent_dir, env_name)
     parent_dir = parent_dir + '-run{}'.format(experiment_id)
+    os.makedirs(parent_dir)
     return parent_dir
 
 
 def main():  # noqa: D103
     parser = argparse.ArgumentParser(description='Run DQN on Atari Breakout')
-    #parser.add_argument('--env', default='Breakout-v0', help='Atari env name')
-    parser.add_argument('--env', default='SpaceInvaders-v0', help='Atari env name')
+    parser.add_argument('--env', default='Breakout-v0', help='Atari env name')
+    #parser.add_argument('--env', default='SpaceInvaders-v0', help='Atari env name')
     parser.add_argument(
         '-o', '--output', default='atari-v0', help='Directory to save data to')
     parser.add_argument('--seed', default=0, type=int, help='Random seed')
@@ -142,7 +151,13 @@ def main():  # noqa: D103
     #env = wrappers.Monitor(env, args.output)
     env.seed(args.seed)
 
-    is_linear = True
+    config = tf.ConfigProto()
+    config.gpu_options.allow_growth=True
+    sess = tf.Session(config=config)
+    K.set_session(sess)
+    K.get_session().run(tf.initialize_all_variables())
+    
+    is_linear = False
     agent = DQNAgent(q_network = create_model(4, (84, 84), env.action_space.n, is_linear),
         q_network2 = create_model(4, (84, 84), env.action_space.n, is_linear),
         preprocessor = AtariPreprocessor((84, 84)),
@@ -152,16 +167,18 @@ def main():  # noqa: D103
         num_burn_in = 50000,
         train_freq = 4,
         batch_size = 32,
-        is_linear = False,
+        is_linear = is_linear,
         model_type = 'double',
         use_replay_and_target_fixing = True,
         epsilon = 0.05,
-        action_interval = 4)
+        action_interval = 4,
+        output_path = args.output,
+        save_freq = 100000)
 
     agent.compile(lr = 0.0001)
-    agent.fit(env, 100)
+    agent.fit(env, 5000000)
     agent.load_weights()
-    agent.evaluate(env, 10, max_episode_length=None)
+    agent.evaluate(env, 100, max_episode_length=None)
     env.close()
     # here is where you should start up a session,
     # create your DQN agent, create your model, etc.

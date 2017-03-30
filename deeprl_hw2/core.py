@@ -1,5 +1,5 @@
 """Core classes."""
-
+import numpy as np
 
 
 class Sample:
@@ -215,14 +215,14 @@ class ReplayMemory:
             self.mem.append(item)
         else:
             # use ring buffer
-            self.mem[head] = item
-            self.head = (head + 1) % self.max_size
+            self.mem[self.head] = item
+            self.head = (self.head + 1) % self.max_size
 
     def end_episode(self, final_state, is_terminal):
         raise NotImplementedError('This method should be overridden')
 
     def sample(self, batch_size, indexes=None):
-        #state_shape = self.mem[0].shape
+        state_shape = self.mem[0][0].shape
         #samples = np.array([]).reshape(0, state_shape[0], state_shape[1])
         samples = []
         for i in range(batch_size):
@@ -238,16 +238,16 @@ class ReplayMemory:
                 ix -= 1
                 if self.mem[ix][3] == True: #is_terminal
                     break
-                state = [self.mem[ix]] + state
+                state = [self.mem[ix][0]] + state
             state = [np.zeros(state_shape) for k in range(4 - len(state))] + state
             if is_terminal:
                 next_state = None
             else:
-                next_state = (state + [self.mem[next_ix]])[-4:]
+                next_state = (state + [self.mem[next_ix][0]])[-4:]
                 next_state = (np.dstack(next_state))/255.0
             state = (np.dstack(state))/255.0
             samples.append([state, action, reward, next_state, is_terminal])
-      return samples
+        return samples
 
 
 
