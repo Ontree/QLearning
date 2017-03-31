@@ -107,7 +107,7 @@ class DQNAgent:
         self.q_network.compile(optimizer=optimizer,
               loss=loss_func,
               metrics=['mse'] )
-        self.q_network.compile(optimizer=optimizer,
+        self.q_network2.compile(optimizer=optimizer,
                                loss=loss_func,
                                metrics=['mse'] )
     #def calc_q_values(self, state):
@@ -120,7 +120,7 @@ class DQNAgent:
         ------
         Q-values for the state(s)
         """
-        Qs = network.predict([np.array([state]), np.array([self.n_action])])[0]
+        Qs = network.predict_on_batch([np.array([state]), np.array([self.n_action])])[0]
         return Qs
 
 
@@ -217,6 +217,7 @@ class DQNAgent:
         ses = tf.get_default_session()
         writer = tf.summary.FileWriter(self.output_path, ses)
         writer.add_graph(tf.get_default_graph())
+
         self.policy = LinearDecayGreedyEpsilonPolicy()
         n_action = env.action_space.n
         self.n_action = n_action
@@ -257,7 +258,7 @@ class DQNAgent:
                 epi_reward = 0
                 state = env.reset()
                 self.his_preprocessor.reset()
-                action_countdown = 0
+                #action_countdown = 0
                 while True: # start an episode
                     state = self.preprocessor.process_state_for_network(state)
                     his_state = self.his_preprocessor.process_state_for_network(state) 
@@ -274,7 +275,7 @@ class DQNAgent:
                     it += 1
                     if it%1000 == 0:
                         print 'it: ', it
-                    action_countdown -= 1
+                    #action_countdown -= 1
                     self.memory.append(state, action, reward, is_terminal)
                     state = next_state
                     if it % self.train_freq == 0:
@@ -285,6 +286,9 @@ class DQNAgent:
                         self.q_network.save_weights(self.weight_file_name)
                     if is_terminal:
                         utils.add_summary(epi_num, 'reward', epi_reward, writer)
+                        if epi_num % 500 == 0:
+                            evaluate_reward = self.evaluate(env, 20)
+                            utils.add_summary(epi_num, 'evaluate_reward', evaluate_reward, writer)
                         break
                     
 
@@ -346,6 +350,7 @@ class DQNAgent:
                   print epi, reward
                   break
         print 'average reward: ', np.mean(rewards)
+        return np.mean(rewards)
 
 
 

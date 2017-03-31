@@ -168,7 +168,7 @@ def main():  # noqa: D103
         train_freq = 4,
         batch_size = 32,
         is_linear = is_linear,
-        model_type = 'double',
+        model_type = 'q-learn',
         use_replay_and_target_fixing = True,
         epsilon = 0.05,
         action_interval = 4,
