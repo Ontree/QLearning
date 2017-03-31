@@ -32,7 +32,7 @@ class HistoryPreprocessor(Preprocessor):
         """You only want history when you're deciding the current action to take."""
         if self.his == []:
             self.his = [np.zeros(state.shape) for i in range(self.history_length)]
-        self.his = self.his[-3:]
+        self.his = self.his[-(self.history_length-1):]
         self.his.append(state)
         return np.dstack(self.his)
 

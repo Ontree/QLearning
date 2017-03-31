@@ -232,18 +232,18 @@ class ReplayMemory:
             next_ix = (ix + 1) % len(self.mem)
             state, action, reward, is_terminal = self.mem[ix]
             state = [state]
-            for j in range(3):
+            for j in range(self.window_length-1):
                 if ix == self.head:
                     break
                 ix -= 1
                 if self.mem[ix][3] == True: #is_terminal
                     break
                 state = [self.mem[ix][0]] + state
-            state = [np.zeros(state_shape) for k in range(4 - len(state))] + state
+            state = [np.zeros(state_shape) for k in range(self.window_length - len(state))] + state
             if is_terminal:
                 next_state = None
             else:
-                next_state = (state + [self.mem[next_ix][0]])[-4:]
+                next_state = (state + [self.mem[next_ix][0]])[-self.window_length:]
                 next_state = (np.dstack(next_state))/255.0
             state = (np.dstack(state))/255.0
             samples.append([state, action, reward, next_state, is_terminal])
