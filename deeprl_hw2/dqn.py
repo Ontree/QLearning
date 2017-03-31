@@ -170,12 +170,36 @@ class DQNAgent:
         states = []
         actions = []
         ys = []
+
+        rewards = []
+        next_states = []
+        terminal_mask = []
+
+        for [state, action, r, next_state, is_terminal] in samples:
+            rewards.append(r)
+            if is_terminal:
+                next_state = np.zeros(state.shape)
+            next_states.append(next_state)
+            terminal_mask.append(1-is_terminal)
+            states.append(state)
+            actions.append(action)
+
+        action_mask = self.n_action * np.ones(self.batch_size)
+        next_q_max = np.max(self.q_network2.predict_on_batch([np.array(next_states),action_mask ]), axis=1).flatten()
+        ys = np.array(rewards) + self.gamma * np.array(terminal_mask) * next_q_max
+        states = np.array(states)
+        actions = np.array(actions)
+        self.q_network.train_on_batch([states, actions], ys)
+
+'''
+
         for [state, action, r, next_state, is_terminal] in samples:
             if is_terminal:
                 y = r
             else:
                 y = r + self.gamma * max(self.calc_q_values(next_state, self.q_network2))
             y = [y] * self.n_action
+
             ys.append(y)
             states.append(state)
             actions.append(action)
@@ -183,7 +207,7 @@ class DQNAgent:
         states = np.array(states)
         actions = np.array(actions)
         self.q_network.train_on_batch([states, actions], ys)
-
+'''
 
 
        
