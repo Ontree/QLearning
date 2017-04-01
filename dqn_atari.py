@@ -135,10 +135,12 @@ def get_output_folder(parent_dir, env_name):
 
 def main():  # noqa: D103
     parser = argparse.ArgumentParser(description='Run DQN on Atari Breakout')
-    parser.add_argument('--env', default='Breakout-v0', help='Atari env name')
-    #parser.add_argument('--env', default='SpaceInvaders-v0', help='Atari env name')
-    parser.add_argument(
-        '-o', '--output', default='atari-v0', help='Directory to save data to')
+    #parser.add_argument('--env', default='Breakout-v0', help='Atari env name')
+    parser.add_argument('--env', default='SpaceInvaders-v0', help='Atari env name')
+    parser.add_argument('--output', default='results', help='Directory to save data to')
+    parser.add_argument('l', '--isLinear', default=0, type=int, choices=range(0, 2), help='1: use linear model; 0: use deep model')
+    parser.add_argument('m', '--modelType', default='q', choices=['q', 'double', 'dueling'], help='q: q learning; double: double q learning; dueling: dueling q learning')
+    parser.add_argument('s', '--simple', default = 0, type=int, choices=range(0, 2), help='1: without replay or target fixing ; 0: use replay and target fixing')
     parser.add_argument('--seed', default=0, type=int, help='Random seed')
 
     args = parser.parse_args()
@@ -156,7 +158,7 @@ def main():  # noqa: D103
     K.set_session(sess)
     K.get_session().run(tf.initialize_all_variables())
     
-    is_linear = False
+    is_linear = args.isLinear
     agent = DQNAgent(q_network = create_model(4, (84, 84), env.action_space.n, is_linear),
         q_network2 = create_model(4, (84, 84), env.action_space.n, is_linear),
         preprocessor = AtariPreprocessor((84, 84)),
@@ -167,9 +169,9 @@ def main():  # noqa: D103
         train_freq = 4,
         batch_size = 32,
         is_linear = is_linear,
-        model_type = 'q-learn',
-        use_replay_and_target_fixing = True,
-        epsilon = 0.05,
+        model_type = args.modelType,
+        use_replay_and_target_fixing = (not simple),
+        epsilon = 0, #0.05,
         action_interval = 4,
         output_path = args.output,
         save_freq = 100000)
