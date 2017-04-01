@@ -223,7 +223,6 @@ class ReplayMemory:
 
     def sample(self, batch_size, indexes=None):
         state_shape = self.mem[0][0].shape
-        #samples = np.array([]).reshape(0, state_shape[0], state_shape[1])
         samples = []
         for i in range(batch_size):
             ix = np.random.randint(0, len(self.mem))
@@ -239,10 +238,12 @@ class ReplayMemory:
                 if self.mem[ix][3] == True: #is_terminal
                     break
                 state = [self.mem[ix][0]] + state
+            # pad with zeros if < 4 frames
             state = [np.zeros(state_shape) for k in range(self.window_length - len(state))] + state
             if is_terminal:
                 next_state = None
             else:
+                # get next state
                 next_state = (state + [self.mem[next_ix][0]])[-self.window_length:]
                 next_state = (np.dstack(next_state))/255.0
             state = (np.dstack(state))/255.0

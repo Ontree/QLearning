@@ -166,6 +166,7 @@ class LinearDecayGreedyEpsilonPolicy(Policy):
         else:
             action = np.argmax(q_values)
 
+        # decay
         if self.epsilon > self.end_value:
             self.epsilon -= self.decay_per_step
         return action

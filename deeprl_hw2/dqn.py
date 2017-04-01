@@ -7,6 +7,7 @@ from objectives import *
 from core import *
 import numpy as np
 import utils
+import os
 
 class DQNAgent:
     """Class implementing DQN.
@@ -170,11 +171,10 @@ class DQNAgent:
         states = []
         actions = []
         ys = []
-
         rewards = []
         next_states = []
         terminal_mask = []
-
+        # get states, actions, rewards, next_states from samples
         for [state, action, r, next_state, is_terminal] in samples:
             rewards.append(r)
             if is_terminal:
@@ -185,28 +185,12 @@ class DQNAgent:
             actions.append(action)
 
         action_mask = self.n_action * np.ones(self.batch_size)
+        # get max q value of next state from target network
         next_q_max = np.max(self.q_network2.predict_on_batch([np.array(next_states),action_mask ]), axis=1).flatten()
         ys = np.array(rewards) + self.gamma * np.array(terminal_mask) * next_q_max
         states = np.array(states)
         actions = np.array(actions)
         self.q_network.train_on_batch([states, actions], ys)
-        '''
-
-        for [state, action, r, next_state, is_terminal] in samples:
-            if is_terminal:
-                y = r
-            else:
-                y = r + self.gamma * max(self.calc_q_values(next_state, self.q_network2))
-            y = [y] * self.n_action
-
-            ys.append(y)
-            states.append(state)
-            actions.append(action)
-        ys = np.array(ys)
-        states = np.array(states)
-        actions = np.array(actions)
-        self.q_network.train_on_batch([states, actions], ys)
-        '''
 
     def fit(self, env, num_iterations, max_episode_length=None):
         """Fit your model to the provided environment.
@@ -241,23 +225,44 @@ class DQNAgent:
         n_action = env.action_space.n
         self.n_action = n_action
         it = 0
+        epi_num = 0
         if self.use_replay_and_target_fixing == False:
+            epi_reward = 0
+            epi_length = 0
             state = env.reset()
             state = self.preprocessor.process_state_for_network(state)
             his_state = self.his_preprocessor.process_state_for_network(state)
             while True:
                 it += 1
+                if it%1000 == 0:
+                    print 'it: ', it
+                epi_length += 1
                 action = self.select_action(his_state, self.q_network,
                                             self.policy)
                 next_s, r, done, info = env.step(action)
+                epi_reward += r
                 r = self.preprocessor.process_reward(r)
                 if done:
+                    epi_num += 1
                     y = r
-                    self.q_network.fit([np.array([his_state]), np.array([action])],np.array([[y]*n_action]),nb_epoch= 1)
+                    self.q_network.train_on_batch([np.array([his_state]), np.array([action])],np.array([[y]*n_action]))
                     state = env.reset()
                     self.his_preprocessor.reset()
                     state = self.preprocessor.process_state_for_network(state)
                     his_state = self.his_preprocessor.process_state_for_network(state)
+
+                    utils.add_summary(epi_num, 'reward_vs_episode', epi_reward, writer)
+                    utils.add_summary(epi_num, 'length_vs_episode', epi_length, writer)
+                    utils.add_summary(it, 'reward_vs_step', epi_reward, writer)
+                    utils.add_summary(it, 'length_vs_step', epi_length, writer)
+                    if epi_num % 100 == 0:
+                        print 'epi: ', epi_num, '  it: ', it
+                        evaluate_reward, evaluate_epi_length = self.evaluate(env, 20， video_path_suffix = 'episode-'str(epi))
+                        utils.add_summary(epi_num, 'evaluate_reward_vs_episode', evaluate_reward, writer)
+                        utils.add_summary(epi_num, 'evaluate_length_vs_episode', evaluate_epi_length, writer)
+                        utils.add_summary(it, 'evaluate_reward_vs_step', evaluate_reward, writer)
+                        utils.add_summary(it, 'evaluate_length_vs_step', evaluate_epi_length, writer)
+                        
                     if it >= num_iterations:
                         self.q_network.save_weights(self.weight_file_name)
                         break
@@ -267,34 +272,28 @@ class DQNAgent:
                     state = self.preprocessor.process_state_for_network(state)
                     his_state = self.his_preprocessor.process_state_for_network(state)
                     y = r + self.gamma * max(self.calc_q_values(his_state, self.q_network))
-                    self.q_network.fit([np.array([old_his]),
-                                        np.array([action])], np.array([[y]*n_action]),nb_epoch = 1)
-        else:
-            it += self.burn_samples(env)
-            epi_num = 0
+                    self.q_network.train_on_batch([np.array([old_his]),
+                                        np.array([action])], np.array([[y]*n_action]))
+        else: #use replay memory and target fixing
+            it, epi_num = self.burn_samples(env)
             while it < num_iterations:
                 epi_num += 1
                 epi_reward = 0
+                epi_length = 0
                 state = env.reset()
                 self.his_preprocessor.reset()
-                #action_countdown = 0
                 while True: # start an episode
                     state = self.preprocessor.process_state_for_network(state)
                     his_state = self.his_preprocessor.process_state_for_network(state) 
-                    '''
-                    if action_countdown == 0: # change action every self.action_interval steps
-                        action = self.select_action(his_state, self.q_network, self.policy)
-                        action_countdown = self.action_interval
-                    '''
                     action = self.select_action(his_state, self.q_network,
                                                 self.policy)
                     next_state, reward, is_terminal, info = env.step(action)
                     epi_reward += reward
+                    epi_length += 1
                     reward = self.preprocessor.process_reward(reward)
                     it += 1
-                    #if it%1000 == 0:
-                    #    print 'it: ', it
-                    #action_countdown -= 1
+                    if it%1000 == 0:
+                        print 'it: ', it
                     self.memory.append(state, action, reward, is_terminal)
                     state = next_state
                     if it % self.train_freq == 0:
@@ -303,22 +302,31 @@ class DQNAgent:
                         utils.get_hard_target_model_updates(self.q_network2, self.q_network)
                     if it % self.save_freq == 0:
                         self.q_network.save_weights(self.weight_file_name)
-                    if is_terminal:
-                        utils.add_summary(epi_num, 'reward', epi_reward, writer)
-                        if epi_num % 500 == 0:
+                    if is_terminal: # add summaries to tensorboard
+                        utils.add_summary(epi_num, 'reward_vs_episode', epi_reward, writer)
+                        utils.add_summary(epi_num, 'length_vs_episode', epi_length, writer)
+                        utils.add_summary(it, 'reward_vs_step', epi_reward, writer)
+                        utils.add_summary(it, 'length_vs_step', epi_length, writer)
+                        if epi_num % 100 == 0:
                             print 'epi: ', epi_num, '  it: ', it
-                            evaluate_reward = self.evaluate(env, 20)
-                            utils.add_summary(epi_num, 'evaluate_reward', evaluate_reward, writer)
+                            evaluate_reward, evaluate_epi_length = self.evaluate(env, 20， video_path_suffix = 'episode-'str(epi))
+                            utils.add_summary(epi_num, 'evaluate_reward_vs_episode', evaluate_reward, writer)
+                            utils.add_summary(epi_num, 'evaluate_length_vs_episode', evaluate_epi_length, writer)
+                            utils.add_summary(it, 'evaluate_reward_vs_step', evaluate_reward, writer)
+                            utils.add_summary(it, 'evaluate_length_vs_step', evaluate_epi_length, writer)
                         break
                     
 
             self.q_network.save_weights(self.weight_file_name)
     
 
-    # collect samples before starting training
+    
     def burn_samples(self, env):
+        """ Use random policy to collect samples before starting training
+        """
         print '# collecting samples'
         it = 0
+        epi_num = 0
         while  it < self.num_burn_in:
             state = env.reset()
             while  True:
@@ -332,14 +340,15 @@ class DQNAgent:
               if it % 100 == 0:
                   print it
               if is_terminal:
+                  epi_num += 1
                   break
-        return it
+        return it, epi_num
 
            
            
 
 
-    def evaluate(self, env, num_episodes, max_episode_length=None):
+    def evaluate(self, env, num_episodes, video_path_suffix=''):
         """Test your agent with a provided environment.
         
         You shouldn't update your network parameters here. Also if you
@@ -352,25 +361,44 @@ class DQNAgent:
         You can also call the render function here if you want to
         visually inspect your policy.
         """
+        video_path = os.path.join(self.output, video_path_suffix)
+        if not os.path.exists(video_path):
+            os.makedirs(video_path)
+        env = gym.wrappers.Monitor(env, video_path)
         policy = GreedyEpsilonPolicy(self.epsilon)
         self.n_action = env.action_space.n
         rewards = []
+        lengths = []
+        output_string = ''
         for epi in range(num_episodes):
             self.his_preprocessor.reset();
             state = env.reset();
             reward = 0
+            length = 0
             while True: 
               state = self.preprocessor.process_state_for_network(state)
               his_state = self.his_preprocessor.process_state_for_network(state)
               action = self.select_action(his_state, self.q_network,policy)
               state, r, done, info = env.step(action)
               reward += r
+              length += 1
               if done:
                   rewards.append(reward)
-                  print epi, reward
+                  lengths.append(length)
+                  print 'epi: ', epi, '  reward: ', reward, '  length: ', length
+                  output_string += 'epi: ' + str(epi) + '  reward: ' + str(reward) + '  length: ' +str(length) + '\n'
                   break
-        print 'average reward: ', np.mean(rewards)
-        return np.mean(rewards)
+
+        print 'average reward: ', np.mean(rewards), ' +- ', np.std(rewards)
+        print 'average length: ', np.mean(lengths), ' +- ', np.std(lengths)
+
+        output_string += 'average reward: ' + str(np.mean(rewards)) + ' +- ' + str(np.std(rewards)) + '\n'
+        output_string += 'average length: ' + str(np.mean(lengths)) + ' +- ' + str(np.std(lengths)) + '\n'
+        report_path = os.path.join(video_path, 'report.txt')
+        with open(report_path, 'wb') as f:
+            f.write(output_string)
+        
+        return np.mean(rewards), np.mean(lengths)
 
 
 

@@ -125,6 +125,7 @@ class AtariPreprocessor(Preprocessor):
         state = state / 255
         '''
         state = Image.fromarray(state)
+        # cropping excludes key information, so just resize!
         state = state.resize(self.new_size, resample=Image.BILINEAR).convert('L')
         state = np.array(state, dtype=np.float32) / 255.0
         return state
