@@ -190,8 +190,7 @@ class DQNAgent:
         states = np.array(states)
         actions = np.array(actions)
         self.q_network.train_on_batch([states, actions], ys)
-
-'''
+        '''
 
         for [state, action, r, next_state, is_terminal] in samples:
             if is_terminal:
@@ -207,11 +206,7 @@ class DQNAgent:
         states = np.array(states)
         actions = np.array(actions)
         self.q_network.train_on_batch([states, actions], ys)
-'''
-
-
-       
-
+        '''
 
     def fit(self, env, num_iterations, max_episode_length=None):
         """Fit your model to the provided environment.
