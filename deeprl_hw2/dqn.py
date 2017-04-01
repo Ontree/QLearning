@@ -75,7 +75,7 @@ class DQNAgent:
         self.batch_size = batch_size
         self.model_type = model_type
         self.use_replay_and_target_fixing = use_replay_and_target_fixing
-        self.model_name = ('linear_' if is_linear else 'deep_') + model_type + ('_simple' if use_replay_and_target_fixing else '')
+        self.model_name = ('linear_' if is_linear else 'deep_') + model_type + ('' if use_replay_and_target_fixing else '_simple')
         self.weight_file_name = output_path + '/' + self.model_name + '.h5'
         self.epsilon = epsilon
         self.his_preprocessor = HistoryPreprocessor()
@@ -167,6 +167,11 @@ class DQNAgent:
         You might want to return the loss and other metrics as an
         output. They can help you monitor how training is going.
         """
+        if self.model_type == 'double':
+            if np.random.random() < 0.5:
+                # flip two networks
+                self.q_network, self.q_network2 = self.q_network2, self.q_network
+
         samples = self.memory.sample(self.batch_size)
         states = []
         actions = []
@@ -255,14 +260,16 @@ class DQNAgent:
                     utils.add_summary(epi_num, 'length_vs_episode', epi_length, writer)
                     utils.add_summary(it, 'reward_vs_step', epi_reward, writer)
                     utils.add_summary(it, 'length_vs_step', epi_length, writer)
+                    epi_reward = 0
+                    epi_length = 0
                     if epi_num % 100 == 0:
                         print 'epi: ', epi_num, '  it: ', it
-                        evaluate_reward, evaluate_epi_length = self.evaluate(env, 20， video_path_suffix = 'episode-'str(epi))
+                        evaluate_reward, evaluate_epi_length = self.evaluate(env, 20, video_path_suffix = 'episode-'str(epi_num))
                         utils.add_summary(epi_num, 'evaluate_reward_vs_episode', evaluate_reward, writer)
                         utils.add_summary(epi_num, 'evaluate_length_vs_episode', evaluate_epi_length, writer)
                         utils.add_summary(it, 'evaluate_reward_vs_step', evaluate_reward, writer)
                         utils.add_summary(it, 'evaluate_length_vs_step', evaluate_epi_length, writer)
-                        
+
                     if it >= num_iterations:
                         self.q_network.save_weights(self.weight_file_name)
                         break
@@ -309,7 +316,7 @@ class DQNAgent:
                         utils.add_summary(it, 'length_vs_step', epi_length, writer)
                         if epi_num % 100 == 0:
                             print 'epi: ', epi_num, '  it: ', it
-                            evaluate_reward, evaluate_epi_length = self.evaluate(env, 20， video_path_suffix = 'episode-'str(epi))
+                            evaluate_reward, evaluate_epi_length = self.evaluate(env, 20, video_path_suffix = 'episode-'str(epi_num))
                             utils.add_summary(epi_num, 'evaluate_reward_vs_episode', evaluate_reward, writer)
                             utils.add_summary(epi_num, 'evaluate_length_vs_episode', evaluate_epi_length, writer)
                             utils.add_summary(it, 'evaluate_reward_vs_step', evaluate_reward, writer)
@@ -361,7 +368,7 @@ class DQNAgent:
         You can also call the render function here if you want to
         visually inspect your policy.
         """
-        video_path = os.path.join(self.output, video_path_suffix)
+        video_path = os.path.join(self.output_path, video_path_suffix)
         if not os.path.exists(video_path):
             os.makedirs(video_path)
         env = gym.wrappers.Monitor(env, video_path)

@@ -7,7 +7,7 @@ import random
 import numpy as np
 import tensorflow as tf
 from keras.layers import (Activation, convolutional, Dense, Flatten, Input,
-                          Merge, Embedding, Reshape, Permute, Reshape, multiply)
+                          Merge, Embedding, Reshape, Permute, Reshape, multiply, Lambda)
 from keras.models import Model, Sequential
 from keras.optimizers import Adam
 
@@ -24,7 +24,7 @@ from keras import backend as K
 
 
 def create_model(window, input_shape, num_actions, is_linear,
-                 model_name='q_network'):  # noqa: D103
+                 model_type):  # noqa: D103
     """Create the Q-network model.
 
     Use Keras to construct a keras.models.Model instance (you can also
@@ -53,6 +53,7 @@ def create_model(window, input_shape, num_actions, is_linear,
       The Q-model.
     """
     # the network for processing image
+    assert(is_linear and model_type!='q')
     im_input = Input((input_shape[0], input_shape[1], window))
     if not is_linear:
         '''
@@ -63,16 +64,16 @@ def create_model(window, input_shape, num_actions, is_linear,
         flatten_layer = Flatten()(conv_layer2)
         fc_layer1 = Dense(256, activation='relu')(flatten_layer)
         '''
-        conv_layer1 = convolutional.Conv2D(32, (8, 8), activation='relu', strides = (4,
-                                                                       4))(im_input)
-        conv_layer2 = convolutional.Conv2D(64, (4, 4), activation='relu', strides = (2, 
-                                                                       2))(conv_layer1)
-        conv_layer3 = convolutional.Conv2D(64, (3, 3), activation='relu', strides = (1, 
-                                                                       1))(conv_layer2)
+        conv_layer1 = convolutional.Conv2D(32, (8, 8), activation='relu', strides = (4, 4))(im_input)
+        conv_layer2 = convolutional.Conv2D(64, (4, 4), activation='relu', strides = (2, 2))(conv_layer1)
+        conv_layer3 = convolutional.Conv2D(64, (3, 3), activation='relu', strides = (1, 1))(conv_layer2)
         flatten_layer = Flatten()(conv_layer3)
         fc_layer1 = Dense(512, activation='relu')(flatten_layer)
-        # more hidden layers?
-        action_layer = Dense(num_actions)(fc_layer1)
+        if model_type == 'dueling':
+            fc_layer2 = Dense(num_actions + 1, activation='relu')(fc_layer1)
+            action_layer = Lambda(lambda x: x[:, 0] + x[:, 1:] - K.mean(x[:, 1:], keepdims = True))(fc_layer2)
+        else:
+            action_layer = Dense(num_actions)(fc_layer1)
     else:
         reshape_layer = Reshape((input_shape[0]*input_shape[1]*window,))(im_input)
         action_layer = Dense(num_actions)(reshape_layer)
@@ -161,8 +162,8 @@ def main():  # noqa: D103
     K.get_session().run(tf.initialize_all_variables())
     
     is_linear = args.isLinear
-    agent = DQNAgent(q_network = create_model(4, (84, 84), env.action_space.n, is_linear),
-        q_network2 = create_model(4, (84, 84), env.action_space.n, is_linear),
+    agent = DQNAgent(q_network = create_model(4, (84, 84), env.action_space.n, is_linear, args.modelType),
+        q_network2 = create_model(4, (84, 84), env.action_space.n, is_linear, args.modelType),
         preprocessor = AtariPreprocessor((84, 84)),
         memory = ReplayMemory(1000000, 4),
         gamma =0.99,
