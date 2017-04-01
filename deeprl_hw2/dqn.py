@@ -297,8 +297,8 @@ class DQNAgent:
                     epi_reward += reward
                     reward = self.preprocessor.process_reward(reward)
                     it += 1
-                    if it%1000 == 0:
-                        print 'it: ', it
+                    #if it%1000 == 0:
+                    #    print 'it: ', it
                     #action_countdown -= 1
                     self.memory.append(state, action, reward, is_terminal)
                     state = next_state
@@ -311,6 +311,7 @@ class DQNAgent:
                     if is_terminal:
                         utils.add_summary(epi_num, 'reward', epi_reward, writer)
                         if epi_num % 500 == 0:
+                            print 'epi: ', epi_num, '  it: ', it
                             evaluate_reward = self.evaluate(env, 20)
                             utils.add_summary(epi_num, 'evaluate_reward', evaluate_reward, writer)
                         break
