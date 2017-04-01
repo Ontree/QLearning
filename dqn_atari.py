@@ -138,16 +138,18 @@ def main():  # noqa: D103
     #parser.add_argument('--env', default='Breakout-v0', help='Atari env name')
     parser.add_argument('--env', default='SpaceInvaders-v0', help='Atari env name')
     parser.add_argument('--output', default='results', help='Directory to save data to')
-    parser.add_argument('l', '--isLinear', default=0, type=int, choices=range(0, 2), help='1: use linear model; 0: use deep model')
-    parser.add_argument('m', '--modelType', default='q', choices=['q', 'double', 'dueling'], help='q: q learning; double: double q learning; dueling: dueling q learning')
-    parser.add_argument('s', '--simple', default = 0, type=int, choices=range(0, 2), help='1: without replay or target fixing ; 0: use replay and target fixing')
+    parser.add_argument('-l', '--isLinear', default=0, type=int, choices=range(0, 2), help='1: use linear model; 0: use deep model')
+    parser.add_argument('-m', '--modelType', default='q', choices=['q', 'double', 'dueling'], help='q: q learning; double: double q learning; dueling: dueling q learning')
+    parser.add_argument('-s', '--simple', default = 0, type=int, choices=range(0, 2), help='1: without replay or target fixing ; 0: use replay and target fixing')
     parser.add_argument('--seed', default=0, type=int, help='Random seed')
 
     args = parser.parse_args()
     
     #args.input_shape = tuple(args.input_shape)
-
-    args.output = get_output_folder(args.output, args.env)
+    if not os.path.exists(args.output):
+        os.makedirs(args.output)
+    model_name = ('linear_' if args.isLinear else 'deep_') + args.modelType + ('_simple' if args.simple else '')
+    args.output = get_output_folder(args.output + '/' + model_name, args.env)
     env = gym.make(args.env)
     #env = gym.wrappers.Monitor(env, args.output)
     env.seed(args.seed)
@@ -170,7 +172,7 @@ def main():  # noqa: D103
         batch_size = 32,
         is_linear = is_linear,
         model_type = args.modelType,
-        use_replay_and_target_fixing = (not simple),
+        use_replay_and_target_fixing = (not args.simple),
         epsilon = 0, #0.05,
         action_interval = 4,
         output_path = args.output,
