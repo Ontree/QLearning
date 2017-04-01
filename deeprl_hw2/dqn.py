@@ -264,7 +264,7 @@ class DQNAgent:
                     epi_length = 0
                     if epi_num % 100 == 0:
                         print 'epi: ', epi_num, '  it: ', it
-                        evaluate_reward, evaluate_epi_length = self.evaluate(env, 20, video_path_suffix = 'episode-'str(epi_num))
+                        evaluate_reward, evaluate_epi_length = self.evaluate(env, 20, video_path_suffix = 'episode-'+str(epi_num))
                         utils.add_summary(epi_num, 'evaluate_reward_vs_episode', evaluate_reward, writer)
                         utils.add_summary(epi_num, 'evaluate_length_vs_episode', evaluate_epi_length, writer)
                         utils.add_summary(it, 'evaluate_reward_vs_step', evaluate_reward, writer)
@@ -316,7 +316,7 @@ class DQNAgent:
                         utils.add_summary(it, 'length_vs_step', epi_length, writer)
                         if epi_num % 100 == 0:
                             print 'epi: ', epi_num, '  it: ', it
-                            evaluate_reward, evaluate_epi_length = self.evaluate(env, 20, video_path_suffix = 'episode-'str(epi_num))
+                            evaluate_reward, evaluate_epi_length = self.evaluate(env, 20, video_path_suffix = 'episode-'+str(epi_num))
                             utils.add_summary(epi_num, 'evaluate_reward_vs_episode', evaluate_reward, writer)
                             utils.add_summary(epi_num, 'evaluate_length_vs_episode', evaluate_epi_length, writer)
                             utils.add_summary(it, 'evaluate_reward_vs_step', evaluate_reward, writer)
