@@ -22,6 +22,7 @@ from keras import backend as K
 
 
 
+
 def create_model(window, input_shape, num_actions, is_linear,
                  model_name='q_network'):  # noqa: D103
     """Create the Q-network model.
@@ -75,13 +76,11 @@ def create_model(window, input_shape, num_actions, is_linear,
     else:
         reshape_layer = Reshape((input_shape[0]*input_shape[1]*window,))(im_input)
         action_layer = Dense(num_actions)(reshape_layer)
-
     # mask the action for gradient passing
     # input_dim = num_actions + 1, the embedding of the last one is [1,..1] which is used to get all q values
     embedding = np.identity(num_actions)
     all_actions = np.ones([1, num_actions])
     embedding = np.append(embedding, all_actions, axis = 0)
-    
     action_input = Input(shape=(1,))
     embedding_layer = Embedding(num_actions + 1, num_actions, input_length=
                                    1, weights=[embedding], trainable=False)(action_input)
@@ -148,7 +147,7 @@ def main():  # noqa: D103
 
     args.output = get_output_folder(args.output, args.env)
     env = gym.make(args.env)
-    #env = wrappers.Monitor(env, args.output)
+    #env = gym.wrappers.Monitor(env, args.output)
     env.seed(args.seed)
 
     config = tf.ConfigProto()
