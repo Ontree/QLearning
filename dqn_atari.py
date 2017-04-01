@@ -53,7 +53,7 @@ def create_model(window, input_shape, num_actions, is_linear,
       The Q-model.
     """
     # the network for processing image
-    assert(not is_linear or model_type == 'q')
+    assert(not is_linear or model_type in ['q', 'double'])
     im_input = Input((input_shape[0], input_shape[1], window))
     if not is_linear:
         '''
