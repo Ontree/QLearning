@@ -177,7 +177,7 @@ def main():  # noqa: D103
     agent.compile(lr = 0.0001)
     agent.fit(env, 5000000)
     agent.load_weights()
-    agent.evaluate(env, 100, max_episode_length=None)
+    agent.evaluate(env, 100, video_path_suffix='final')
     env.close()
     # here is where you should start up a session,
     # create your DQN agent, create your model, etc.
