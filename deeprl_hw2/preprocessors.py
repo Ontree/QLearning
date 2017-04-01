@@ -107,6 +107,7 @@ class AtariPreprocessor(Preprocessor):
         Basically same as process state for memory, but this time
         outputs float32 images.
         """
+        '''
         new_size = self.new_size
         r, g, b = state[:,:,0], state[:,:,1], state[:,:,2]
         state = 0.2989 * r + 0.5870 * g + 0.1140 * b
@@ -122,6 +123,10 @@ class AtariPreprocessor(Preprocessor):
         start = ((size[0] - new_size[0]) / 2, (size[1] - new_size[1]) / 2)
         state = state[start[0]:start[0]+new_size[0], start[1]:start[1]+new_size[0]]
         state = state / 255
+        '''
+        state = Image.fromarray(state)
+        state = state.resize(self.new_size, resample=Image.BILINEAR).convert('L')
+        state = np.array(state, dtype=np.float32) / 255.0
         return state
 
 
