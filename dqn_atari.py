@@ -71,7 +71,7 @@ def create_model(window, input_shape, num_actions, is_linear,
         fc_layer1 = Dense(512, activation='relu')(flatten_layer)
         if model_type == 'dueling':
             fc_layer2 = Dense(num_actions + 1, activation='relu')(fc_layer1)
-            action_layer = Lambda(lambda x: x[:, 0] + x[:, 1:] - K.mean(x[:, 1:], keepdims = True))(fc_layer2)
+            action_layer = Lambda(lambda x: x[:, 0:1] + x[:, 1:] - K.mean(x[:, 1:], keepdims = True))(fc_layer2)
         else:
             action_layer = Dense(num_actions)(fc_layer1)
     else:
