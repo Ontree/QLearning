@@ -88,6 +88,7 @@ def create_model(window, input_shape, num_actions, is_linear,
     mask_layer = Reshape((num_actions,))(embedding_layer)
     output_layer = multiply([action_layer, mask_layer])
     model = Model([im_input, action_input], output_layer)
+    model.summary()
     return model
 
 
