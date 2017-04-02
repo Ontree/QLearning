@@ -383,6 +383,7 @@ class DQNAgent:
         if not os.path.exists(video_path):
             os.makedirs(video_path)
         env = gym.wrappers.Monitor(env, video_path)
+        # use greedy policy
         policy = GreedyEpsilonPolicy(self.epsilon)
         self.n_action = env.action_space.n
         rewards = []
