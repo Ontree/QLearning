@@ -72,7 +72,7 @@ def create_model(window, input_shape, num_actions, is_linear,
         fc_layer1 = Dense(512, activation='relu')(flatten_layer)
         if model_type == 'dueling':
             fc_layer2 = Dense(512, activation='relu')(flatten_layer)
-            v_layer = Dense(1, output_shape = (1,))(fc_layer1)
+            v_layer = Dense(1)(fc_layer1)
             a_layer_tmp = Dense(num_actions, activation='relu')(fc_layer2)
             a_layer_processed = Lambda(lambda x: x[:, :] - K.mean(x[:, :], keepdims = True))(a_layer_tmp)
             action_layer = add([v_layer, a_layer_processed])
