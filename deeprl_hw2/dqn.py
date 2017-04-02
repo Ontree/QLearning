@@ -73,6 +73,7 @@ class DQNAgent:
         self.num_burn_in = num_burn_in
         self.train_freq = train_freq
         self.batch_size = batch_size
+        self.is_linear = is_linear
         self.model_type = model_type
         self.use_replay_and_target_fixing = use_replay_and_target_fixing
         self.model_name = ('linear_' if is_linear else 'deep_') + model_type + ('' if use_replay_and_target_fixing else '_simple')
@@ -103,12 +104,12 @@ class DQNAgent:
         optimizer.
         """
         if optimizer_name == 'adam':
-            optimizer = Adam(lr=lr)
+            optimizer1, optimizer2 = Adam(lr=lr), Adam(lr=lr)
 
-        self.q_network.compile(optimizer=optimizer,
+        self.q_network.compile(optimizer=optimizer1,
               loss=loss_func,
               metrics=['mse'] )
-        self.q_network2.compile(optimizer=optimizer,
+        self.q_network2.compile(optimizer=optimizer2,
                                loss=loss_func,
                                metrics=['mse'] )
     #def calc_q_values(self, state):
@@ -167,11 +168,12 @@ class DQNAgent:
         You might want to return the loss and other metrics as an
         output. They can help you monitor how training is going.
         """
-        if self.model_type == 'double':
+        # double q learning
+        if self.model_type == 'double' and self.is_linear: 
             if np.random.random() < 0.5:
                 # flip two networks
                 self.q_network, self.q_network2 = self.q_network2, self.q_network
-
+        
         samples = self.memory.sample(self.batch_size)
         states = []
         actions = []
@@ -190,8 +192,17 @@ class DQNAgent:
             actions.append(action)
 
         action_mask = self.n_action * np.ones(self.batch_size)
-        # get max q value of next state from target network
-        next_q_max = np.max(self.q_network2.predict_on_batch([np.array(next_states),action_mask ]), axis=1).flatten()
+        if self.model_type == 'double' and not self.is_linear:
+            # doulbe DQN
+            # get best action by online network
+            next_actions =np.argmax(self.q_network.predict_on_batch([np.array(next_states), action_mask]), axis=1).flatten() 
+            # get next q value by target network taking next actions. Here
+            # np.max = np.sum because other outputs are 0 except for the chosen
+            # action
+            next_q_max = np.max(self.q_network2.predict_on_batch([np.array(next_states), next_actions]), axis=1).flatten()
+        else:
+            # get max q value of next state from target network
+            next_q_max = np.max(self.q_network2.predict_on_batch([np.array(next_states),action_mask ]), axis=1).flatten()
         ys = np.array(rewards) + self.gamma * np.array(terminal_mask) * next_q_max
         states = np.array(states)
         actions = np.array(actions)
