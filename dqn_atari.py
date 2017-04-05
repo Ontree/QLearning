@@ -75,7 +75,7 @@ def create_model(window, input_shape, num_actions, is_linear,
             v_layer = Dense(1)(fc_layer1)
             v_layer_repeated = RepeatVector(num_actions)(v_layer)
             v_layer_repeated = Flatten()(v_layer_repeated)
-            a_layer_tmp = Dense(num_actions, activation='relu')(fc_layer2)
+            a_layer_tmp = Dense(num_actions)(fc_layer2)
             a_layer_processed = Lambda(lambda x: x[:, :] - K.mean(x[:, :],
                                                                   axis=1,keepdims = True))(a_layer_tmp)
             action_layer = add([v_layer_repeated, a_layer_processed])
